@@ -1,0 +1,16 @@
+# @package _global_
+module:
+  _target_: emg2qwerty.lightning.TransformerCTCModule
+  in_features: 528
+  mlp_features: [384]
+  d_model: 512
+  nhead: 8
+  num_encoder_layers: 4
+  dim_feedforward: 2048
+  dropout: 0.1
+  max_seq_len: 8000
+  
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 8000  # 4 sec windows for 2kHz EMG
+  padding: [1800, 200]  # 900ms past context, 100ms future context

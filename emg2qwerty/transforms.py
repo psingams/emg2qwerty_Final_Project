@@ -188,6 +188,14 @@ class LogSpectrogram:
         logspec = torch.log10(spec + 1e-6)  # (..., C, freq, T)
         return logspec.movedim(-1, 0)  # (T, ..., C, freq)
 
+@dataclass
+class SelectChannels:
+    """Retain only the first ``n_channels`` electrode channels per band.
+    Input shape: (T, bands, C, freq) — slices along the C dimension."""
+    n_channels: int  # out of 16
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        return tensor[..., :self.n_channels, :]
 
 @dataclass
 class SpecAugment:

@@ -1,0 +1,30 @@
+# @package _global_
+transforms:
+  train:
+    - _target_: emg2qwerty.transforms.ToTensor
+      fields: [emg_left, emg_right]
+    # Independent band rotation per wrist
+    - _target_: emg2qwerty.transforms.ForEach
+      transform:
+        _target_: emg2qwerty.transforms.RandomBandRotation
+        offsets: [-1, 0, 1]
+    # Simulate slight hardware misalignment between wrists
+    - _target_: emg2qwerty.transforms.TemporalAlignmentJitter
+      max_offset: 120
+    - _target_: emg2qwerty.transforms.LogSpectrogram
+      n_fft: 64
+      hop_length: 16
+    - _target_: emg2qwerty.transforms.SpecAugment
+      n_time_masks: 4
+      time_mask_param: 40
+      n_freq_masks: 2
+      freq_mask_param: 6
+
+  val:
+    - _target_: emg2qwerty.transforms.ToTensor
+      fields: [emg_left, emg_right]
+    - _target_: emg2qwerty.transforms.LogSpectrogram
+      n_fft: 64
+      hop_length: 16
+
+  test: ${transforms.val}
