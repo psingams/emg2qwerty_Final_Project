@@ -1,0 +1,38 @@
+Global seed set to 1501
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+HPU available: False, using: 0 HPUs
+Missing logger folder: /home/pranav/Desktop/emg2qwerty/logs/2026-03-11/17-17-29/job0_logspec.hop_length=12,trainer.devices=1,user=single_user/lightning_logs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/home/pranav/miniconda3/envs/emg2qwerty/lib/python3.10/site-packages/pl_bolts/__init__.py:11: FutureWarning: In the future `np.object` will be defined as the corresponding NumPy scalar.
+  if not hasattr(numpy, tp_name):
+/home/pranav/miniconda3/envs/emg2qwerty/lib/python3.10/site-packages/pl_bolts/__init__.py:11: FutureWarning: In the future `np.bool` will be defined as the corresponding NumPy scalar.
+  if not hasattr(numpy, tp_name):
+/home/pranav/miniconda3/envs/emg2qwerty/lib/python3.10/site-packages/pl_bolts/models/self_supervised/amdim/amdim_module.py:34: UnderReviewWarning: The feature generate_power_seq is currently marked under review. The compatibility with other Lightning projects is not guaranteed and API may change at any time. The API and functionality may change without warning in future releases. More details: https://lightning-bolts.readthedocs.io/en/latest/stability.html
+  "lr_options": generate_power_seq(LEARNING_RATE_CIFAR, 11),
+/home/pranav/miniconda3/envs/emg2qwerty/lib/python3.10/site-packages/pl_bolts/models/self_supervised/amdim/amdim_module.py:92: UnderReviewWarning: The feature FeatureMapContrastiveTask is currently marked under review. The compatibility with other Lightning projects is not guaranteed and API may change at any time. The API and functionality may change without warning in future releases. More details: https://lightning-bolts.readthedocs.io/en/latest/stability.html
+  contrastive_task: Union[FeatureMapContrastiveTask] = FeatureMapContrastiveTask("01, 02, 11"),
+/home/pranav/miniconda3/envs/emg2qwerty/lib/python3.10/site-packages/pl_bolts/losses/self_supervised_learning.py:228: UnderReviewWarning: The feature AmdimNCELoss is currently marked under review. The compatibility with other Lightning projects is not guaranteed and API may change at any time. The API and functionality may change without warning in future releases. More details: https://lightning-bolts.readthedocs.io/en/latest/stability.html
+  self.nce_loss = AmdimNCELoss(tclip)
+/home/pranav/miniconda3/envs/emg2qwerty/lib/python3.10/site-packages/hydra/_internal/instantiate/_instantiate2.py:92: UnderReviewWarning: The feature LinearWarmupCosineAnnealingLR is currently marked under review. The compatibility with other Lightning projects is not guaranteed and API may change at any time. The API and functionality may change without warning in future releases. More details: https://lightning-bolts.readthedocs.io/en/latest/stability.html
+  return _target_(*args, **kwargs)
+
+  | Name         | Type                          | Params
+---------------------------------------------------------------
+0 | spec_norm    | SpectrogramNorm               | 64    
+1 | mlp          | MultiBandRotationInvariantMLP | 406 K 
+2 | flatten      | Flatten                       | 0     
+3 | cnn          | Sequential                    | 1.3 M 
+4 | lstm         | LSTM                          | 24.3 M
+5 | lstm_dropout | Dropout                       | 0     
+6 | classifier   | Sequential                    | 126 K 
+7 | ctc_loss     | CTCLoss                       | 0     
+8 | metrics      | ModuleDict                    | 0     
+---------------------------------------------------------------
+26.1 M    Trainable params
+0         Non-trainable params
+26.1 M    Total params
+104.498   Total estimated model params size (MB)
+/home/pranav/miniconda3/envs/emg2qwerty/lib/python3.10/site-packages/torch/nn/modules/conv.py:306: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at ../aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return F.conv1d(input, weight, bias, self.stride,

@@ -1,0 +1,5 @@
+- user=single_user
+- trainer.accelerator=gpu
+- trainer.devices=1
+- module.dropout=0.05
+- trainer.max_epochs=50

@@ -1,0 +1,5 @@
+- user=single_user
+- checkpoint='/home/pranav/Desktop/emg2qwerty_Final_Project/logs/2026-03-13/18-30-14/job0_trainer.devices=1,user=single_user/checkpoints/epoch=143-step=17280.ckpt'
+- train=False
+- trainer.accelerator=gpu
+- decoder=ctc_greedy

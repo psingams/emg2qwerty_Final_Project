@@ -1,0 +1,21 @@
+in_features: 528
+mlp_features:
+- 384
+rnn_hidden_size: 512
+rnn_num_layers: 3
+rnn_type: lstm
+dropout: 0
+bidirectional: true
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 0.01
+lr_scheduler:
+  scheduler:
+    _target_: pl_bolts.optimizers.lr_scheduler.LinearWarmupCosineAnnealingLR
+    warmup_epochs: 10
+    max_epochs: 150
+    warmup_start_lr: 1.0e-08
+    eta_min: 1.0e-06
+  interval: epoch
+decoder:
+  _target_: emg2qwerty.decoder.CTCGreedyDecoder

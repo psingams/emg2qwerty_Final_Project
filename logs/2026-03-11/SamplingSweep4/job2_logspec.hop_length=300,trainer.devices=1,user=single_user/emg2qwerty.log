@@ -1,0 +1,660 @@
+[2026-03-11 16:42:35,489][__main__][INFO] - 
+Config:
+user: single_user
+dataset:
+  train:
+  - user: 89335547
+    session: 2021-06-03-1622765527-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-02-1622681518-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-04-1622863166-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-07-22-1627003020-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-07-21-1626916256-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-07-22-1627004019-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-05-1622885888-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-02-1622679967-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-03-1622764398-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-07-21-1626917264-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-05-1622889105-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-03-1622766673-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-04-1622861066-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-07-22-1627001995-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-05-1622884635-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-07-21-1626915176-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  val:
+  - user: 89335547
+    session: 2021-06-04-1622862148-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  test:
+  - user: 89335547
+    session: 2021-06-02-1622682789-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  root: ${hydra:runtime.cwd}/data
+to_tensor:
+  _target_: emg2qwerty.transforms.ToTensor
+  fields:
+  - emg_left
+  - emg_right
+band_rotation:
+  _target_: emg2qwerty.transforms.ForEach
+  transform:
+    _target_: emg2qwerty.transforms.RandomBandRotation
+    offsets:
+    - -1
+    - 0
+    - 1
+temporal_jitter:
+  _target_: emg2qwerty.transforms.TemporalAlignmentJitter
+  max_offset: 120
+logspec:
+  _target_: emg2qwerty.transforms.LogSpectrogram
+  n_fft: 64
+  hop_length: 300
+specaug:
+  _target_: emg2qwerty.transforms.SpecAugment
+  n_time_masks: 1
+  time_mask_param: 15
+  n_freq_masks: 2
+  freq_mask_param: 2
+stripchannels:
+  _target_: emg2qwerty.transforms.SelectChannels
+  n_channels: 16
+transforms:
+  train:
+  - ${to_tensor}
+  - ${band_rotation}
+  - ${temporal_jitter}
+  - ${logspec}
+  - ${stripchannels}
+  - ${specaug}
+  val:
+  - _target_: emg2qwerty.transforms.ToTensor
+    fields:
+    - emg_left
+    - emg_right
+  - ${logspec}
+  - ${stripchannels}
+  test: ${transforms.val}
+module:
+  _target_: emg2qwerty.lightning.CNNLSTMCTCModule
+  in_features: 528
+  mlp_features:
+  - 384
+  cnn_channels:
+  - 256
+  - 256
+  cnn_kernel_size: 5
+  n_channels: 16
+  lstm_hidden_size: 320
+  lstm_num_layers: 2
+  dropout: 0.2
+  bidirectional: true
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 8000
+  padding:
+  - 1800
+  - 200
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 0.001
+lr_scheduler:
+  scheduler:
+    _target_: pl_bolts.optimizers.lr_scheduler.LinearWarmupCosineAnnealingLR
+    warmup_epochs: 10
+    max_epochs: ${trainer.max_epochs}
+    warmup_start_lr: 1.0e-08
+    eta_min: 1.0e-06
+  interval: epoch
+decoder:
+  _target_: emg2qwerty.decoder.CTCGreedyDecoder
+seed: 1501
+batch_size: 32
+num_workers: 4
+train: true
+checkpoint: null
+monitor_metric: val/CER
+monitor_mode: min
+trainer:
+  accelerator: gpu
+  devices: 1
+  num_nodes: 1
+  max_epochs: 150
+  default_root_dir: ${hydra:runtime.output_dir}
+callbacks:
+- _target_: pytorch_lightning.callbacks.LearningRateMonitor
+- _target_: pytorch_lightning.callbacks.ModelCheckpoint
+  dirpath: ${hydra:runtime.output_dir}/checkpoints
+  monitor: ${monitor_metric}
+  mode: ${monitor_mode}
+  save_last: true
+  verbose: true
+
+[2026-03-11 16:42:35,489][__main__][INFO] - Instantiating LightningModule {'_target_': 'emg2qwerty.lightning.CNNLSTMCTCModule', 'in_features': 528, 'mlp_features': [384], 'cnn_channels': [256, 256], 'cnn_kernel_size': 5, 'n_channels': 16, 'lstm_hidden_size': 320, 'lstm_num_layers': 2, 'dropout': 0.2, 'bidirectional': True}
+[2026-03-11 16:42:35,524][__main__][INFO] - Instantiating LightningDataModule {'_target_': 'emg2qwerty.lightning.WindowedEMGDataModule', 'window_length': 8000, 'padding': [1800, 200]}
+[2026-03-11 16:42:37,616][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:39,092][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:39,583][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:40,533][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:41,701][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:42,989][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:43,425][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:44,451][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:45,561][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:46,011][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:47,485][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:48,958][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:49,775][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:50,390][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:51,309][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:52,605][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:52,834][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:54,277][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:55,350][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:55,917][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:56,749][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:58,188][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:59,075][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:42:59,613][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:01,256][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:02,424][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:02,761][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:03,971][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:04,901][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:05,625][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:06,320][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:07,534][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:08,937][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:09,044][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:11,382][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:12,694][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:13,376][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:15,896][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:17,420][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:18,818][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:19,256][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:20,350][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:21,325][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:21,735][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:23,142][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:24,390][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:25,246][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:26,030][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:27,367][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:28,798][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:28,968][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:30,288][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:31,867][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:32,590][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:33,487][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:34,548][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:35,716][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:36,209][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:37,543][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:38,795][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:39,313][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:40,382][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:41,364][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:42,074][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:42,747][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:44,095][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:45,012][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:45,143][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:46,649][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:47,997][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:48,753][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:49,843][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:51,060][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:51,903][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:52,371][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:53,682][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:55,094][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:55,578][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:57,051][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:58,662][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:43:59,674][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:00,352][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:01,415][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:02,430][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:02,620][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:04,372][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:05,417][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:06,001][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:06,974][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:08,193][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:09,393][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:09,827][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:11,359][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:12,862][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:13,129][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:14,551][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:15,841][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:16,827][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:17,503][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:18,426][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:19,935][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:20,154][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:21,592][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:22,688][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:23,342][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:24,355][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:25,677][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:26,777][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:27,239][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:27,981][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:28,688][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:28,990][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:31,159][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:32,207][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:32,762][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:34,329][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:35,087][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:36,363][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:36,518][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:37,986][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:38,886][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:39,345][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:40,293][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:41,351][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:42,622][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:43,100][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:44,356][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:45,345][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:45,644][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:46,802][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:48,205][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:48,763][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:49,528][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:50,967][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:52,320][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:52,559][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:53,867][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:55,312][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:56,044][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:57,178][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:58,551][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:44:59,782][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:00,282][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:01,546][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:02,532][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:02,938][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:04,371][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:05,380][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:06,440][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:07,305][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:08,795][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:10,363][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:10,594][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:12,231][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:13,656][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:14,492][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:15,454][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:16,497][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:17,941][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:18,496][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:19,644][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:20,883][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:21,186][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:22,367][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:23,432][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:24,357][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:24,934][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:25,919][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:26,772][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:26,947][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:28,240][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:29,538][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:30,085][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:30,824][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:31,868][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:33,232][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:34,735][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:35,884][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:37,343][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:37,740][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:39,534][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:40,588][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:41,265][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:42,082][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:43,220][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:44,611][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:44,769][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:45,902][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:47,430][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:48,031][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:48,725][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:49,859][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:51,102][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:51,375][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:52,594][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:53,952][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:54,392][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:55,623][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:56,713][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:57,775][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:58,510][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:45:59,576][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:00,579][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:00,802][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:02,484][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:03,767][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:04,336][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:05,238][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:06,276][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:07,198][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:07,683][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:09,104][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:10,230][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:10,641][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:12,118][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:13,211][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:13,871][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:14,739][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:16,008][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:16,897][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:17,127][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:18,715][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:20,291][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:21,011][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:21,623][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:22,977][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:24,183][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:24,730][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:25,648][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:26,649][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:27,135][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:28,440][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:29,792][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:30,482][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:31,268][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:32,881][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:34,245][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:34,486][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:35,787][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:36,888][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:37,714][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:38,946][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:39,891][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:40,449][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:42,214][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:43,491][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:44,782][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:45,296][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:47,265][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:48,421][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:49,211][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:49,745][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:50,820][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:51,957][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:52,162][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:53,731][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:55,326][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:56,159][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:57,285][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:46:58,841][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:00,130][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:00,624][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:02,294][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:03,867][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:04,426][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:05,456][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:06,883][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:07,944][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:08,647][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:10,004][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:11,202][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:11,432][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:12,873][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:14,310][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:14,777][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:15,898][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:16,998][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:18,001][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:18,539][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:20,137][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:21,400][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:21,795][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:22,777][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:23,878][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:24,614][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:25,325][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:26,608][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:27,775][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:27,920][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:29,645][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:31,220][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:31,982][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:33,490][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:34,317][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:35,604][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:36,818][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:37,787][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:39,212][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:39,740][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:40,983][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:42,130][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:43,151][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:43,891][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:45,080][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:46,076][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:46,281][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:47,792][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:49,133][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:49,572][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:50,668][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:52,267][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:53,537][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:53,983][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:55,533][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:57,224][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:57,687][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:47:59,088][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:00,389][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:01,407][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:02,273][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:03,643][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:05,034][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:05,283][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:06,774][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:08,372][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:09,215][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:10,129][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:10,948][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:11,809][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:12,190][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:13,177][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:14,606][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:14,941][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:16,328][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:17,934][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:18,801][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:19,422][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:20,754][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:21,922][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:22,161][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:23,502][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:24,788][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:25,295][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:26,320][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:27,718][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:28,863][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:29,345][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:30,596][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:31,570][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:32,072][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:33,188][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:34,025][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:34,942][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:35,654][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:36,821][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:37,878][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:38,014][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:40,116][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:41,489][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:42,250][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:43,397][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:44,067][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:44,668][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:45,957][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:47,320][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:48,298][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:48,821][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:50,029][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:51,557][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:52,508][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:53,218][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:54,540][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:55,635][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:55,875][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:57,151][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:58,405][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:58,939][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:48:59,753][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:00,568][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:01,991][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:02,399][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:03,457][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:04,382][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:04,773][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:05,697][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:07,091][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:07,885][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:08,517][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:09,756][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:10,641][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:10,724][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:12,083][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:13,275][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:13,977][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:14,968][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:15,803][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:16,883][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:17,297][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:18,471][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:19,452][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:19,756][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:21,084][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:22,159][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:22,872][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:23,689][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:24,649][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:25,766][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:25,980][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:27,364][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:28,394][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:29,024][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:29,948][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:31,553][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:32,905][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:33,355][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:34,586][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:35,906][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:36,262][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:37,603][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:38,756][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:39,728][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:41,213][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:42,152][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:43,272][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:43,426][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:45,856][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:46,854][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:47,348][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:49,123][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:50,430][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:51,750][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:52,380][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:53,527][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:54,418][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:54,672][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:55,883][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:57,343][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:58,324][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:58,917][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:49:59,952][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:01,047][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:01,181][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:02,722][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:04,094][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:04,971][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:05,852][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:06,886][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:08,234][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:08,715][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:10,291][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:11,513][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:12,006][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:13,324][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:14,890][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:15,783][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:16,655][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:18,390][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:19,815][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:20,037][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:21,484][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:23,076][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:23,764][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:24,728][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:25,984][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:27,037][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:27,636][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:28,719][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:29,665][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:30,086][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:31,217][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:32,342][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:33,231][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:33,997][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:35,246][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:36,026][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:36,135][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:37,833][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:39,474][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:40,265][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:41,156][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:42,466][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:43,842][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:44,310][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:45,547][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:46,371][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:46,868][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:47,952][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:49,390][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:50,096][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:50,776][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:51,894][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:53,230][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:53,411][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:55,179][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:56,456][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:57,239][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:58,540][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:50:59,720][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:51:00,648][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:51:02,459][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:51:03,751][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:51:04,644][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:51:04,970][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:51:07,144][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:51:08,243][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:51:08,934][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:51:09,712][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:51:10,757][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:51:12,114][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:51:12,279][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:51:12,878][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:51:13,863][tensorboardX.x2num][WARNING] - NaN or Inf found in input tensor.
+[2026-03-11 16:51:13,928][submitit][INFO] - Job completed successfully
+[2026-03-11 16:51:13,931][submitit][INFO] - Exiting after successful completion

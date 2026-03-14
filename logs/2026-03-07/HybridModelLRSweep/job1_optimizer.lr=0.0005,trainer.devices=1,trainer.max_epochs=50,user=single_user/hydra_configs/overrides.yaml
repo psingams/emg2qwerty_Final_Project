@@ -1,0 +1,5 @@
+- user=single_user
+- trainer.accelerator=gpu
+- trainer.devices=1
+- trainer.max_epochs=50
+- optimizer.lr=0.0005

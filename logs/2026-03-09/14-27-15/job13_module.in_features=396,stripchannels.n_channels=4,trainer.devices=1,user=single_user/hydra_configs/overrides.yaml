@@ -1,0 +1,5 @@
+- user=single_user
+- trainer.accelerator=gpu
+- trainer.devices=1
+- stripchannels.n_channels=4
+- module.in_features=396

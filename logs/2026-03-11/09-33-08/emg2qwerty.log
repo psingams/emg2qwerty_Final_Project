@@ -1,0 +1,123 @@
+[2026-03-11 09:33:08,275][__main__][INFO] - 
+Config:
+user: single_user
+dataset:
+  train:
+  - user: 89335547
+    session: 2021-06-03-1622765527-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-02-1622681518-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-06-04-1622863166-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  - user: 89335547
+    session: 2021-07-22-1627003020-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  val:
+  - user: 89335547
+    session: 2021-06-04-1622862148-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  test:
+  - user: 89335547
+    session: 2021-06-02-1622682789-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
+  root: ${hydra:runtime.cwd}/data
+to_tensor:
+  _target_: emg2qwerty.transforms.ToTensor
+  fields:
+  - emg_left
+  - emg_right
+band_rotation:
+  _target_: emg2qwerty.transforms.ForEach
+  transform:
+    _target_: emg2qwerty.transforms.RandomBandRotation
+    offsets:
+    - -1
+    - 0
+    - 1
+temporal_jitter:
+  _target_: emg2qwerty.transforms.TemporalAlignmentJitter
+  max_offset: 120
+logspec:
+  _target_: emg2qwerty.transforms.LogSpectrogram
+  n_fft: 64
+  hop_length: 16
+specaug:
+  _target_: emg2qwerty.transforms.SpecAugment
+  n_time_masks: 1
+  time_mask_param: 15
+  n_freq_masks: 2
+  freq_mask_param: 2
+stripchannels:
+  _target_: emg2qwerty.transforms.SelectChannels
+  n_channels: 16
+transforms:
+  train:
+  - ${to_tensor}
+  - ${band_rotation}
+  - ${temporal_jitter}
+  - ${logspec}
+  - ${stripchannels}
+  - ${specaug}
+  val:
+  - _target_: emg2qwerty.transforms.ToTensor
+    fields:
+    - emg_left
+    - emg_right
+  - ${logspec}
+  - ${stripchannels}
+  test: ${transforms.val}
+module:
+  _target_: emg2qwerty.lightning.CNNLSTMCTCModule
+  in_features: 528
+  mlp_features:
+  - 384
+  cnn_channels:
+  - 256
+  - 256
+  cnn_kernel_size: 5
+  n_channels: 16
+  lstm_hidden_size: 320
+  lstm_num_layers: 2
+  dropout: 0.2
+  bidirectional: true
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 8000
+  padding:
+  - 1800
+  - 200
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 0.001
+lr_scheduler:
+  scheduler:
+    _target_: pl_bolts.optimizers.lr_scheduler.LinearWarmupCosineAnnealingLR
+    warmup_epochs: 10
+    max_epochs: ${trainer.max_epochs}
+    warmup_start_lr: 1.0e-08
+    eta_min: 1.0e-06
+  interval: epoch
+decoder:
+  _target_: emg2qwerty.decoder.CTCGreedyDecoder
+seed: 1501
+batch_size: 32
+num_workers: 4
+train: false
+checkpoint: /home/pranav/Desktop/emg2qwerty/logs/2026-03-10/SamplingRateSweep/job0_logspec.hop_length=24,trainer.devices=1,user=single_user/checkpoints/epoch=117-step=14160.ckpt
+monitor_metric: val/CER
+monitor_mode: min
+trainer:
+  accelerator: gpu
+  devices: 1
+  num_nodes: 1
+  max_epochs: 150
+  default_root_dir: ${hydra:runtime.output_dir}
+callbacks:
+- _target_: pytorch_lightning.callbacks.LearningRateMonitor
+- _target_: pytorch_lightning.callbacks.ModelCheckpoint
+  dirpath: ${hydra:runtime.output_dir}/checkpoints
+  monitor: ${monitor_metric}
+  mode: ${monitor_mode}
+  save_last: true
+  verbose: true
+
+[2026-03-11 09:33:08,279][__main__][INFO] - Instantiating LightningModule {'_target_': 'emg2qwerty.lightning.CNNLSTMCTCModule', 'in_features': 528, 'mlp_features': [384], 'cnn_channels': [256, 256], 'cnn_kernel_size': 5, 'n_channels': 16, 'lstm_hidden_size': 320, 'lstm_num_layers': 2, 'dropout': 0.2, 'bidirectional': True}
+[2026-03-11 09:33:08,421][__main__][INFO] - Loading module from checkpoint /home/pranav/Desktop/emg2qwerty/logs/2026-03-10/SamplingRateSweep/job0_logspec.hop_length=24,trainer.devices=1,user=single_user/checkpoints/epoch=117-step=14160.ckpt
+[2026-03-11 09:33:08,610][__main__][INFO] - Instantiating LightningDataModule {'_target_': 'emg2qwerty.lightning.WindowedEMGDataModule', 'window_length': 8000, 'padding': [1800, 200]}
